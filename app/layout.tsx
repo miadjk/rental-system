@@ -19,7 +19,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Cho Rental — Dress Rental Tracking",
+  title: "Cho Rental",
   description: "Minimal, elegant dress rental tracking system for boutique owners.",
 };
 
