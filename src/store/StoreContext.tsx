@@ -21,6 +21,16 @@ import {
 } from "@/src/lib/storage";
 import { buildSeed } from "@/src/lib/seed";
 import { isOverdue, isDueToday, normalizeDressName, nowISO, uid } from "@/src/lib/utils";
+import { getSupabase } from "@/src/lib/supabase";
+import {
+  fetchAll,
+  seedCloudIfEmpty,
+  dbInsertDress,
+  dbUpdateDress,
+  dbInsertRental,
+  dbUpdateRental,
+  dbInsertReturn,
+} from "@/src/lib/supabaseRepo";
 
 interface AddDressInput {
   dress_name: string;
@@ -59,6 +69,9 @@ interface ReturnInput {
 
 interface StoreState {
   ready: boolean;
+  /** "cloud" when Supabase env vars are set and reachable, otherwise localStorage. */
+  dataSource: "cloud" | "local";
+  cloudError: string | null;
   dresses: Dress[];
   rentals: Rental[];
   returns: ReturnRecord[];
@@ -74,12 +87,12 @@ interface StoreState {
   rentalsForDress: (dressId: string) => Rental[];
   rentalsForName: (name: string) => Rental[];
   activeRentalForDress: (dressId: string) => Rental | undefined;
-  addDress: (input: AddDressInput) => Dress;
-  updateDress: (id: string, patch: Partial<Dress>) => void;
-  archiveDress: (id: string) => void;
-  addRental: (input: AddRentalInput) => Rental;
-  addRentalByName: (input: AddRentalByNameInput) => { rental: Rental; matchedDress?: Dress; createdDress?: Dress };
-  completeReturn: (input: ReturnInput) => void;
+  addDress: (input: AddDressInput) => Promise<Dress>;
+  updateDress: (id: string, patch: Partial<Dress>) => Promise<void>;
+  archiveDress: (id: string) => Promise<void>;
+  addRental: (input: AddRentalInput) => Promise<Rental>;
+  addRentalByName: (input: AddRentalByNameInput) => Promise<{ rental: Rental; matchedDress?: Dress; createdDress?: Dress }>;
+  completeReturn: (input: ReturnInput) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreState | null>(null);
@@ -96,13 +109,19 @@ function backfillRentalNames(rentals: Rental[], dresses: Dress[]): Rental[] {
   return changed ? mapped : rentals;
 }
 
+// Guards double seeding under React StrictMode double-mount.
+let cloudSeedPromise: Promise<unknown> | null = null;
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [dataSource, setDataSource] = useState<"cloud" | "local">("local");
+  const [cloudError, setCloudError] = useState<string | null>(null);
   const [dresses, setDresses] = useState<Dress[]>([]);
   const [rentals, setRentals] = useState<Rental[]>([]);
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
   const rentalsRef = useRef<Rental[]>([]);
   const dressesRef = useRef<Dress[]>([]);
+  const cloudRef = useRef(false);
   useEffect(() => {
     rentalsRef.current = rentals;
   }, [rentals]);
@@ -111,35 +130,68 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [dresses]);
 
   useEffect(() => {
-    const d = loadDresses();
-    const r = loadRentals();
-    const ret = loadReturns();
-    const seed = buildSeed();
-    const seeded = seedIfNeeded(d, r, seed.dresses, seed.rentals, seed.returns);
-    if (seeded) {
-      setDresses(seeded.dresses);
-      setRentals(backfillRentalNames(seeded.rentals, seeded.dresses));
-      setReturns(seeded.returns);
-    } else {
-      setDresses(d);
-      setRentals(backfillRentalNames(r, d));
-      setReturns(ret);
-    }
-    setReady(true);
+    let cancelled = false;
+    (async () => {
+      const sb = getSupabase();
+      if (sb) {
+        try {
+          let data = await fetchAll(sb);
+          if (data.dresses.length === 0 && data.rentals.length === 0) {
+            if (!cloudSeedPromise) cloudSeedPromise = seedCloudIfEmpty(sb);
+            const seeded = (await cloudSeedPromise) as Awaited<ReturnType<typeof seedCloudIfEmpty>>;
+            if (seeded) data = seeded;
+          }
+          if (cancelled) return;
+          cloudRef.current = true;
+          setDataSource("cloud");
+          setDresses(data.dresses);
+          setRentals(data.rentals);
+          setReturns(data.returns);
+        } catch (err) {
+          if (cancelled) return;
+          // Never lock the owner out: fall back to local data.
+          setCloudError(err instanceof Error ? err.message : "Could not reach Supabase.");
+          loadLocal();
+        }
+      } else {
+        loadLocal();
+      }
+      if (!cancelled) setReady(true);
+
+      function loadLocal() {
+        const d = loadDresses();
+        const r = loadRentals();
+        const ret = loadReturns();
+        const seed = buildSeed();
+        const seeded = seedIfNeeded(d, r, seed.dresses, seed.rentals, seed.returns);
+        if (seeded) {
+          setDresses(seeded.dresses);
+          setRentals(backfillRentalNames(seeded.rentals, seeded.dresses));
+          setReturns(seeded.returns);
+        } else {
+          setDresses(d);
+          setRentals(backfillRentalNames(r, d));
+          setReturns(ret);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || cloudRef.current) return;
     saveDresses(dresses);
   }, [dresses, ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || cloudRef.current) return;
     saveRentals(rentals);
   }, [rentals, ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || cloudRef.current) return;
     saveReturns(returns);
   }, [returns, ready]);
 
@@ -209,7 +261,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [rentals, dresses]
   );
 
-  const addDress = useCallback((input: AddDressInput) => {
+  const addDress = useCallback(async (input: AddDressInput) => {
+    const sb = getSupabase();
+    if (sb && cloudRef.current) {
+      const created = await dbInsertDress(sb, {
+        dress_name: input.dress_name.trim(),
+        quantity: input.quantity,
+        rental_price: input.rental_price,
+        date_added: input.date_added,
+        status: input.status,
+      });
+      setDresses((prev) => [created, ...prev]);
+      return created;
+    }
     const now = nowISO();
     const dress: Dress = {
       id: uid("dress"),
@@ -222,11 +286,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updated_at: now,
     };
     setDresses((prev) => [dress, ...prev]);
-    dressesRef.current = [dress, ...dressesRef.current];
     return dress;
   }, []);
 
-  const updateDress = useCallback((id: string, patch: Partial<Dress>) => {
+  const updateDress = useCallback(async (id: string, patch: Partial<Dress>) => {
+    const sb = getSupabase();
+    if (sb && cloudRef.current) {
+      const updated = await dbUpdateDress(sb, id, patch);
+      setDresses((prev) => prev.map((d) => (d.id === id ? updated : d)));
+      return;
+    }
     setDresses((prev) =>
       prev.map((d) =>
         d.id === id ? { ...d, ...patch, updated_at: nowISO() } : d
@@ -234,7 +303,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const archiveDress = useCallback((id: string) => {
+  const archiveDress = useCallback(async (id: string) => {
+    const sb = getSupabase();
+    if (sb && cloudRef.current) {
+      const updated = await dbUpdateDress(sb, id, { status: "Archived" });
+      setDresses((prev) => prev.map((d) => (d.id === id ? updated : d)));
+      return;
+    }
     setDresses((prev) =>
       prev.map((d) =>
         d.id === id ? { ...d, status: "Archived" as const, updated_at: nowISO() } : d
@@ -248,7 +323,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * - Links + flips Available → Rented when the name matches inventory.
    * - Optionally creates the inventory record when the name is new.
    */
-  const addRentalByName = useCallback((input: AddRentalByNameInput) => {
+  const addRentalByName = useCallback(async (input: AddRentalByNameInput) => {
     const dressName = input.dress_name.trim().replace(/\s+/g, " ");
     const norm = normalizeDressName(dressName);
     if (!norm) throw new Error("Enter a dress name.");
@@ -263,14 +338,48 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    const now = nowISO();
+    const sb = getSupabase();
     const matched = dressesRef.current.find(
       (d) => d.status !== "Archived" && normalizeDressName(d.dress_name) === norm
     );
 
+    if (sb && cloudRef.current) {
+      let dressId: string | null = null;
+      let matchedDress: Dress | undefined;
+      let createdDress: Dress | undefined;
+
+      if (matched) {
+        dressId = matched.id;
+        matchedDress = await dbUpdateDress(sb, matched.id, { status: "Rented" });
+        setDresses((prev) => prev.map((d) => (d.id === matched.id ? matchedDress as Dress : d)));
+      } else if (input.addToInventory) {
+        createdDress = await dbInsertDress(sb, {
+          dress_name: dressName,
+          quantity: 1,
+          rental_price: input.rental_fee,
+          date_added: input.rental_date,
+          status: "Rented",
+        });
+        dressId = createdDress.id;
+        setDresses((prev) => [createdDress as Dress, ...prev]);
+      }
+
+      const rental = await dbInsertRental(sb, {
+        dress_name: dressName,
+        dress_id: dressId,
+        customer_name: input.customer_name.trim(),
+        rental_date: input.rental_date,
+        expected_return_date: input.expected_return_date,
+        rental_fee: input.rental_fee,
+      });
+      setRentals((prev) => [rental, ...prev]);
+      return { rental, matchedDress, createdDress };
+    }
+
+    const now = nowISO();
     let dressId: string | null = null;
-    let createdDress: Dress | undefined;
     let matchedDress: Dress | undefined;
+    let createdDress: Dress | undefined;
 
     if (matched) {
       dressId = matched.id;
@@ -308,16 +417,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updated_at: now,
     };
     setRentals((prev) => [rental, ...prev]);
-    rentalsRef.current = [rental, ...rentalsRef.current];
     return { rental, matchedDress, createdDress };
   }, []);
 
   /** Legacy id-based entry (inventory shortcut) — delegates to manual-entry logic. */
   const addRental = useCallback(
-    (input: AddRentalInput) => {
+    async (input: AddRentalInput) => {
       const dress = dressesRef.current.find((d) => d.id === input.dress_id);
       const name = dress ? dress.dress_name : input.dress_id;
-      const { rental } = addRentalByName({
+      const { rental } = await addRentalByName({
         dress_name: name,
         customer_name: input.customer_name,
         rental_date: input.rental_date,
@@ -329,10 +437,35 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [addRentalByName]
   );
 
-  const completeReturn = useCallback((input: ReturnInput) => {
-    const now = nowISO();
+  const completeReturn = useCallback(async (input: ReturnInput) => {
+    const sb = getSupabase();
     const target = rentalsRef.current.find((r) => r.id === input.rental_id);
     const dressId = target?.dress_id ?? null;
+    const nextStatus = input.markUnavailable || input.condition === "Damaged" ? "Unavailable" : "Available";
+
+    if (sb && cloudRef.current) {
+      const updated = await dbUpdateRental(sb, input.rental_id, {
+        status: "Returned",
+        actual_return_date: input.actual_return_date,
+        condition: input.condition,
+        remarks: input.remarks,
+      });
+      setRentals((prev) => prev.map((r) => (r.id === input.rental_id ? updated : r)));
+      const ret = await dbInsertReturn(sb, {
+        rental_id: input.rental_id,
+        actual_return_date: input.actual_return_date,
+        condition: input.condition,
+        remarks: input.remarks,
+      });
+      setReturns((prev) => [ret, ...prev]);
+      if (dressId) {
+        const updatedDress = await dbUpdateDress(sb, dressId, { status: nextStatus as Dress["status"] });
+        setDresses((prev) => prev.map((d) => (d.id === dressId ? updatedDress : d)));
+      }
+      return;
+    }
+
+    const now = nowISO();
     setRentals((prev) =>
       prev.map((r) =>
         r.id === input.rental_id
@@ -365,10 +498,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           d.id === dressId
             ? {
                 ...d,
-                status:
-                  input.markUnavailable || input.condition === "Damaged"
-                    ? ("Unavailable" as const)
-                    : ("Available" as const),
+                status: nextStatus as Dress["status"],
                 updated_at: now,
               }
             : d
@@ -391,6 +521,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const value: StoreState = {
     ready,
+    dataSource,
+    cloudError,
     dresses,
     rentals,
     returns,

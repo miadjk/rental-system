@@ -35,15 +35,19 @@ export function ReturnModal({
   const linked = rental.dress_id ? dressById(rental.dress_id) : undefined;
   const dressName = rental.dress_name || linked?.dress_name || "Unknown dress";
 
-  const confirm = (e: React.FormEvent) => {
+  const confirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    completeReturn({
-      rental_id: rental.id,
-      actual_return_date: actualDate || todayISO(),
-      condition,
-      remarks,
-      markUnavailable: markUnavailable || condition === "Damaged",
-    });
+    try {
+      await completeReturn({
+        rental_id: rental.id,
+        actual_return_date: actualDate || todayISO(),
+        condition,
+        remarks,
+        markUnavailable: markUnavailable || condition === "Damaged",
+      });
+    } catch (err) {
+      return notify(err instanceof Error ? err.message : "Could not record return.", "error");
+    }
     notify("Dress returned successfully.");
     onClose();
   };

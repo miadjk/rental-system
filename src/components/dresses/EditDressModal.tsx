@@ -34,16 +34,20 @@ export function EditDressModal({
 
   if (!dress) return null;
 
-  const save = (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
     // Prevent marking Rented manually if no active rental? Allow but keep simple: only Available/Unavailable editable, Rented locked.
-    updateDress(dress.id, {
-      dress_name: name.trim(),
-      quantity: Math.max(1, parseInt(qty || "1", 10)),
-      rental_price: Number(price || 0),
-      date_added: date,
-      status: status === "Rented" ? dress.status : status,
-    });
+    try {
+      await updateDress(dress.id, {
+        dress_name: name.trim(),
+        quantity: Math.max(1, parseInt(qty || "1", 10)),
+        rental_price: Number(price || 0),
+        date_added: date,
+        status: status === "Rented" ? dress.status : status,
+      });
+    } catch (err) {
+      return notify(err instanceof Error ? err.message : "Could not save changes.", "error");
+    }
     notify("Dress updated successfully.");
     onClose();
   };

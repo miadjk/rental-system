@@ -15,6 +15,7 @@ export function AddDressModal({ open, onClose }: { open: boolean; onClose: () =>
   const [price, setPrice] = useState("");
   const [date, setDate] = useState(todayISO());
   const [status, setStatus] = useState("Available");
+  const [saving, setSaving] = useState(false);
 
   const reset = () => {
     setName("");
@@ -24,18 +25,25 @@ export function AddDressModal({ open, onClose }: { open: boolean; onClose: () =>
     setStatus("Available");
   };
 
-  const save = (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return notify("Enter a dress name.", "error");
     const q = Math.max(1, parseInt(qty || "1", 10));
     const p = Math.max(0, Number(price || 0));
-    addDress({
-      dress_name: name,
-      quantity: isNaN(q) ? 1 : q,
-      rental_price: isNaN(p) ? 0 : p,
-      date_added: date || todayISO(),
-      status: status as "Available" | "Rented" | "Unavailable",
-    });
+    setSaving(true);
+    try {
+      await addDress({
+        dress_name: name,
+        quantity: isNaN(q) ? 1 : q,
+        rental_price: isNaN(p) ? 0 : p,
+        date_added: date || todayISO(),
+        status: status as "Available" | "Rented" | "Unavailable",
+      });
+    } catch (err) {
+      setSaving(false);
+      return notify(err instanceof Error ? err.message : "Could not save dress.", "error");
+    }
+    setSaving(false);
     notify("Dress added successfully.");
     reset();
     onClose();
@@ -58,7 +66,7 @@ export function AddDressModal({ open, onClose }: { open: boolean; onClose: () =>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <SecondaryButton type="button" onClick={onClose}>Cancel</SecondaryButton>
-          <PrimaryButton type="submit">Save Dress</PrimaryButton>
+          <PrimaryButton type="submit" disabled={saving}>{saving ? "Saving…" : "Save Dress"}</PrimaryButton>
         </div>
       </form>
     </Modal>

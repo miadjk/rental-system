@@ -144,8 +144,11 @@ export default function InventoryPage() {
         confirmLabel="Archive"
         onConfirm={() => {
           if (archiving) {
-            archiveDress(archiving.id);
-            notify("Dress archived. History preserved.");
+            archiveDress(archiving.id)
+              .then(() => notify("Dress archived. History preserved."))
+              .catch((err) =>
+                notify(err instanceof Error ? err.message : "Could not archive dress.", "error")
+              );
           }
         }}
       />

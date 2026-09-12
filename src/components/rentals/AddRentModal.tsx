@@ -26,6 +26,7 @@ export function AddRentModal({
   const [fee, setFee] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendingUnknown, setPendingUnknown] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -58,7 +59,7 @@ export function AddRentModal({
     addToInventory,
   });
 
-  const save = (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -83,36 +84,45 @@ export function AddRentModal({
       return;
     }
 
+    setSaving(true);
     try {
-      addRentalByName(buildInput(false));
+      await addRentalByName(buildInput(false));
     } catch (err) {
+      setSaving(false);
       setError(err instanceof Error ? err.message : "Could not save rental.");
       return;
     }
+    setSaving(false);
     notify("Rental recorded successfully.");
     onClose();
   };
 
-  const confirmAddToInventory = () => {
+  const confirmAddToInventory = async () => {
+    setSaving(true);
     try {
-      addRentalByName(buildInput(true));
+      await addRentalByName(buildInput(true));
     } catch (err) {
+      setSaving(false);
       setPendingUnknown(false);
       setError(err instanceof Error ? err.message : "Could not save rental.");
       return;
     }
+    setSaving(false);
     notify("Dress added to inventory. Rental recorded successfully.");
     onClose();
   };
 
-  const confirmStandalone = () => {
+  const confirmStandalone = async () => {
+    setSaving(true);
     try {
-      addRentalByName(buildInput(false));
+      await addRentalByName(buildInput(false));
     } catch (err) {
+      setSaving(false);
       setPendingUnknown(false);
       setError(err instanceof Error ? err.message : "Could not save rental.");
       return;
     }
+    setSaving(false);
     notify("Rental recorded successfully.");
     onClose();
   };
@@ -138,11 +148,11 @@ export function AddRentModal({
             <SecondaryButton type="button" onClick={() => setPendingUnknown(false)}>
               Back
             </SecondaryButton>
-            <SecondaryButton type="button" onClick={confirmStandalone}>
-              Continue Rental
+            <SecondaryButton type="button" onClick={confirmStandalone} disabled={saving}>
+              {saving ? "Saving…" : "Continue Rental"}
             </SecondaryButton>
-            <PrimaryButton type="button" onClick={confirmAddToInventory}>
-              Add to Inventory
+            <PrimaryButton type="button" onClick={confirmAddToInventory} disabled={saving}>
+              {saving ? "Saving…" : "Add to Inventory"}
             </PrimaryButton>
           </div>
         </div>
@@ -199,7 +209,7 @@ export function AddRentModal({
 
           <div className="flex justify-end gap-2">
             <SecondaryButton type="button" onClick={onClose}>Cancel</SecondaryButton>
-            <PrimaryButton type="submit">Save Rental</PrimaryButton>
+            <PrimaryButton type="submit" disabled={saving}>{saving ? "Saving…" : "Save Rental"}</PrimaryButton>
           </div>
         </form>
       )}

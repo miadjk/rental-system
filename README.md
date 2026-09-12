@@ -37,12 +37,18 @@ Password → Dashboard → Inventory → Add Dress → Add Rent
 
 ## Data
 
-- Persistent `localStorage` layer (`src/lib/storage.ts`) with relational shape:
+- Relational shape (`supabase/schema.sql` mirrors this):
   - `dresses`: id, dress_name, quantity, rental_price, date_added, status
   - `rentals`: id, dress_name (typed), dress_id (link or null), customer_name, rental_date, expected_return_date, actual_return_date, rental_fee, status, condition, remarks
   - `returns`: id, rental_id, actual_return_date, condition, remarks
 - Seeded with Fitted Pink / Black Glitz (rented to Maria) / Valentina + 4 Black Glitz history records.
-- Swap `StoreContext` persistence to a real DB later without touching UI.
+- **Supabase (optional):** run `supabase/schema.sql` in the SQL Editor, then add to `.env.local`:
+  ```
+  NEXT_PUBLIC_SUPABASE_URL=https://xyzcompany.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+  ```
+  With these set, the app reads/writes Supabase (banner shows "Connected to Supabase");
+  without them it uses persistent `localStorage` (`src/lib/storage.ts`). Never use the service-role key in the app.
 
 ## Design
 
