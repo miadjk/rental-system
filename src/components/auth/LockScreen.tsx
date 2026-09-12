@@ -49,8 +49,8 @@ export function LockScreen() {
                   type={show ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="•••••••••"
-                  maxLength={9}
+                  placeholder="••••••••"
+                  maxLength={32}
                   autoFocus
                   className="w-full rounded-xl border border-[#CCBEB1] bg-white px-3 py-3 pr-16 text-sm tracking-widest text-[#2B2118] focus:border-[#997E67] focus:outline-none focus:ring-2 focus:ring-[#FFDBBB]"
                 />
@@ -63,7 +63,7 @@ export function LockScreen() {
                 </button>
               </div>
               <span className="mt-1 block text-xs text-[#B9A892]">
-                9 characters · letters + numbers + symbol
+                8+ characters · letters + numbers + symbol
               </span>
             </label>
 

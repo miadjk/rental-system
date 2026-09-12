@@ -81,7 +81,7 @@ export function normalizeDressName(name: string): string {
 }
 
 export function validatePasswordFormat(pw: string): string | null {
-  if (pw.length !== 9) return "Password must be exactly 9 characters.";
+  if (pw.length < 8) return "Password must be at least 8 characters.";
   if (!/[A-Za-z]/.test(pw)) return "Password must contain letters.";
   if (!/[0-9]/.test(pw)) return "Password must contain numbers.";
   if (!/[^A-Za-z0-9]/.test(pw)) return "Password must contain a symbol.";

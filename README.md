@@ -13,11 +13,11 @@ Open http://localhost:3000
 
 ## Owner access (no login accounts)
 
-- Password screen only. Set via `.env.local`:
+- Password screen only. Set via `.env.local` (prototype default is hardcoded server-side):
   ```
-  APP_PASSWORD=Abc12@xyz
+  APP_PASSWORD=Cho2026!
   ```
-- Must be exactly 9 chars with letters + numbers + symbol.
+- Must be at least 8 chars with letters + numbers + symbol.
 - Verified server-side via `POST /api/auth`; session kept in `sessionStorage`.
 - `Lock System` button returns to the password screen.
 

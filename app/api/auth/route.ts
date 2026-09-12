@@ -11,13 +11,9 @@ function hasSymbol(s: string) {
 }
 
 export async function POST(req: Request) {
-  const configured = process.env.APP_PASSWORD ?? "";
-  if (!configured) {
-    return NextResponse.json(
-      { ok: false, error: "Password is not configured on the server." },
-      { status: 500 }
-    );
-  }
+  // Prototype owner password (server-side only, never sent to the client).
+  // Overridable via APP_PASSWORD without a code change.
+  const configured = process.env.APP_PASSWORD || "Cho2026!";
   let password = "";
   try {
     const body = await req.json();
@@ -26,9 +22,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
   }
 
-  if (password.length !== 9 || !hasLetter(password) || !hasNumber(password) || !hasSymbol(password)) {
+  if (password.length < 8 || !hasLetter(password) || !hasNumber(password) || !hasSymbol(password)) {
     return NextResponse.json(
-      { ok: false, error: "Password must be 9 characters with letters, numbers, and a symbol." },
+      { ok: false, error: "Password must be at least 8 characters with letters, numbers, and a symbol." },
       { status: 401 }
     );
   }
