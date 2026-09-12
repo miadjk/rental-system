@@ -55,7 +55,7 @@ export function Sidebar({
         <div className="fixed inset-0 z-40 bg-[#2B2118]/30 lg:hidden" onClick={onClose} />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[248px] flex-col border-r border-[#EDE4D9] bg-[#FFFDF9] px-4 py-6 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[248px] flex-col border-r border-[#EDE4D9] bg-[#FFFDF9] px-4 py-6 transition-transform duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

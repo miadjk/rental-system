@@ -32,7 +32,7 @@ export function Modal({
       <div
         className={`animate-slide-up relative w-full rounded-t-3xl border border-[#EDE4D9] bg-[#FAF8F5] shadow-xl sm:rounded-3xl ${
           wide ? "sm:max-w-3xl" : "sm:max-w-lg"
-        } max-h-[92vh] overflow-y-auto`}
+        } max-h-[92dvh] overflow-y-auto`}
       >
         <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-[#EDE4D9] bg-[#FAF8F5]/95 px-6 py-5 backdrop-blur">
           <div>

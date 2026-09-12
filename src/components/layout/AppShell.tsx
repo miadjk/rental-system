@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#FAF8F5]">
+      <div className="flex min-h-dvh items-center justify-center bg-[#FAF8F5]">
         <p className="font-heading text-sm text-[#997E67]">Loading boutique…</p>
       </div>
     );
@@ -45,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!authed) return <LockScreen />;
 
   return (
-    <div className="flex min-h-screen bg-[#FAF8F5]">
+    <div className="flex min-h-dvh bg-[#FAF8F5]">
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header onMenu={() => setMobileOpen(true)} />

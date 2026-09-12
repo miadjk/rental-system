@@ -26,7 +26,7 @@ export function LockScreen() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#FAF8F5] px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-[#FAF8F5] px-4 py-8">
       <div className="w-full max-w-md">
         <div className="rounded-3xl border border-[#EDE4D9] bg-white p-8 shadow-[0_8px_30px_rgba(102,73,48,0.08)]">
           <p className="text-center text-[10px] font-semibold uppercase tracking-[0.28em] text-[#997E67]">
